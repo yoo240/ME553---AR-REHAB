@@ -5,11 +5,10 @@ interface TopNavProps {
   currentView: AppView;
   onNavigate: (view: AppView) => void;
   onPrimaryAction: () => void;
-  hasActiveProgress: boolean;
+  rehabScore: number;
 }
 
 const NAV_ITEMS: Array<{ id: AppView; label: string }> = [
-  { id: 'dashboard', label: 'Patient Dashboard' },
   { id: 'active-ar', label: 'Active AR Session' },
   { id: 'summary', label: 'Session Summary' },
   { id: 'clinician', label: 'Clinician Portal' },
@@ -19,14 +18,9 @@ export const TopNav: React.FC<TopNavProps> = ({
   currentView,
   onNavigate,
   onPrimaryAction,
-  hasActiveProgress,
 }) => {
   const primaryLabel =
-    currentView === 'active-ar'
-      ? 'Finish Session'
-      : hasActiveProgress
-      ? 'Resume Session'
-      : 'Start Session';
+    currentView === 'active-ar' ? 'Finish Session' : 'Back to AR Session';
 
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-slate-200">
@@ -34,16 +28,16 @@ export const TopNav: React.FC<TopNavProps> = ({
         {/* Zone 1: Single-element brand wordmark */}
         <button
           type="button"
-          onClick={() => onNavigate('dashboard')}
-          className="text-lg font-display font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 rounded"
+          onClick={() => onNavigate('active-ar')}
+          className="text-lg font-display font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 rounded cursor-pointer"
         >
           AR Rehab Companion
         </button>
 
-        {/* Zone 2: 4 clean single-line navigation links */}
+        {/* Zone 2: 3 clean single-line navigation tabs */}
         <nav
           aria-label="Primary navigation"
-          className="hidden md:flex items-center gap-6 overflow-x-auto"
+          className="hidden md:flex items-center gap-7 overflow-x-auto"
         >
           {NAV_ITEMS.map((item) => {
             const isActive = currentView === item.id;
@@ -53,7 +47,7 @@ export const TopNav: React.FC<TopNavProps> = ({
                 type="button"
                 onClick={() => onNavigate(item.id)}
                 aria-current={isActive ? 'page' : undefined}
-                className={`relative py-2 text-sm font-medium whitespace-nowrap shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 rounded ${
+                className={`relative py-2 text-sm font-medium whitespace-nowrap shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 rounded cursor-pointer ${
                   isActive
                     ? 'text-teal-700 font-semibold'
                     : 'text-slate-600 hover:text-slate-900'
@@ -76,7 +70,7 @@ export const TopNav: React.FC<TopNavProps> = ({
           <button
             type="button"
             onClick={onPrimaryAction}
-            className="px-4 py-2 text-sm font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-teal-600 cursor-pointer"
+            className="px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-teal-600 cursor-pointer"
           >
             {primaryLabel}
           </button>
@@ -95,7 +89,7 @@ export const TopNav: React.FC<TopNavProps> = ({
               key={item.id}
               type="button"
               onClick={() => onNavigate(item.id)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap shrink-0 transition-colors ${
+              className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
                 isActive
                   ? 'bg-teal-50 text-teal-800 font-semibold'
                   : 'text-slate-600 hover:text-slate-900'

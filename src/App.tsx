@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActiveARSession } from './components/ActiveARSession';
 import { ClinicianPortal } from './components/ClinicianPortal';
-import { PatientDashboard } from './components/PatientDashboard';
 import { SessionSummary } from './components/SessionSummary';
 import { TopNav } from './components/TopNav';
 import {
+  computeFormTier,
   createInitialTelemetry,
   INITIAL_ALERTS,
   INITIAL_EHR_LOGS,
@@ -20,18 +20,23 @@ import {
 } from './types/rehab';
 
 export function App() {
-  const [currentView, setCurrentView] = useState<AppView>('dashboard');
+  const [currentView, setCurrentView] = useState<AppView>('active-ar');
   const [exercises, setExercises] = useState<Exercise[]>(INITIAL_EXERCISES);
   const [selectedExerciseIndex, setSelectedExerciseIndex] = useState<number>(0);
+  const [showReferenceGate, setShowReferenceGate] = useState<boolean>(true);
   const [telemetry, setTelemetry] = useState<Record<string, ExerciseTelemetry>>(() =>
     createInitialTelemetry(INITIAL_EXERCISES)
   );
 
-  // IR sensor calibration state
-  const [irConnected, setIrConnected] = useState(true);
-  const [isCalibrating, setIsCalibrating] = useState(false);
+  // Gamified Score & Streak State
+  const [rehabScore, setRehabScore] = useState<number>(0);
+  const [streakCount, setStreakCount] = useState<number>(0);
+  const [bestStreak, setBestStreak] = useState<number>(0);
+  const [lastPointsDelta, setLastPointsDelta] = useState<{ id: number; amount: number } | null>(
+    null
+  );
 
-  // Alerts & EHR Logs shared between Active AR, Session Summary, and Clinician Portal
+  // Shared Alerts & EHR Logs
   const [alerts, setAlerts] = useState<FormDriftAlert[]>(INITIAL_ALERTS);
   const [sessionAlerts, setSessionAlerts] = useState<FormDriftAlert[]>([]);
   const [ehrLogs, setEhrLogs] = useState<EHRSessionRecord[]>(INITIAL_EHR_LOGS);
@@ -45,6 +50,7 @@ export function App() {
 
   const syncTimersRef = useRef<number[]>([]);
   const lastSyncedIdRef = useRef<string | null>(null);
+  const pointsTimerRef = useRef<number | null>(null);
 
   const clearSyncTimers = () => {
     syncTimersRef.current.forEach((id) => window.clearTimeout(id));
@@ -52,22 +58,28 @@ export function App() {
   };
 
   useEffect(() => {
-    return () => clearSyncTimers();
+    return () => {
+      clearSyncTimers();
+      if (pointsTimerRef.current) window.clearTimeout(pointsTimerRef.current);
+    };
   }, []);
 
-  const handleCalibrateSensor = () => {
-    if (isCalibrating) return;
-    setIsCalibrating(true);
-    window.setTimeout(() => {
-      setIsCalibrating(false);
-      setIrConnected(true);
-    }, 900);
+  const comboMultiplier = Math.min(4, 1 + Math.floor(streakCount / 2));
+
+  const showFloatingPoints = (amount: number) => {
+    if (pointsTimerRef.current) window.clearTimeout(pointsTimerRef.current);
+    setLastPointsDelta({ id: Date.now(), amount });
+    pointsTimerRef.current = window.setTimeout(() => {
+      setLastPointsDelta(null);
+    }, 950);
   };
 
   const triggerEHRCloudSync = useCallback(
     (
       snapshotTelemetry: Record<string, ExerciseTelemetry>,
       snapshotExercises: Exercise[],
+      scoreSnapshot: number,
+      bestStreakSnapshot: number,
       pain: number,
       effort: number,
       note: string
@@ -140,6 +152,9 @@ export function App() {
           totalRepsCompleted: totalCompleted,
           totalRepsTarget: totalTarget,
           averageAccuracyPct,
+          pointsEarned: scoreSnapshot,
+          bestStreak: Math.max(1, bestStreakSnapshot),
+          formTier: computeFormTier(averageAccuracyPct),
           painScore: pain,
           effortScore: effort,
           patientNote: note.trim(),
@@ -164,12 +179,35 @@ export function App() {
   );
 
   const handleFinishSession = useCallback(
-    (overrideTelemetry?: Record<string, ExerciseTelemetry>) => {
+    (
+      overrideTelemetry?: Record<string, ExerciseTelemetry>,
+      overrideScore?: number,
+      overrideBestStreak?: number
+    ) => {
       const activeTel = overrideTelemetry ?? telemetry;
+      const finalScore = overrideScore ?? rehabScore;
+      const finalStreak = overrideBestStreak ?? bestStreak;
       setCurrentView('summary');
-      triggerEHRCloudSync(activeTel, exercises, painScore, effortScore, patientNote);
+      triggerEHRCloudSync(
+        activeTel,
+        exercises,
+        finalScore,
+        finalStreak,
+        painScore,
+        effortScore,
+        patientNote
+      );
     },
-    [telemetry, exercises, painScore, effortScore, patientNote, triggerEHRCloudSync]
+    [
+      telemetry,
+      rehabScore,
+      bestStreak,
+      exercises,
+      painScore,
+      effortScore,
+      patientNote,
+      triggerEHRCloudSync,
+    ]
   );
 
   const handleRecordGoodRep = (exerciseId: string, achievedAngle: number) => {
@@ -179,6 +217,17 @@ export function App() {
 
     const current = telemetry[exerciseId];
     if (!current || current.status === 'completed') return;
+
+    const nextStreak = streakCount + 1;
+    const nextMultiplier = Math.min(4, 1 + Math.floor(nextStreak / 2));
+    const earned = 100 * nextMultiplier;
+    const nextScore = rehabScore + earned;
+    const nextBestStreak = Math.max(bestStreak, nextStreak);
+
+    setStreakCount(nextStreak);
+    setBestStreak(nextBestStreak);
+    setRehabScore(nextScore);
+    showFloatingPoints(earned);
 
     const nextRepsInSet = current.completedRepsInCurrentSet + 1;
     const reachedEndOfSet = nextRepsInSet >= ex.reps;
@@ -214,6 +263,10 @@ export function App() {
     };
 
     if (isExerciseDone) {
+      const bonusScore = nextScore + 250;
+      setRehabScore(bonusScore);
+      showFloatingPoints(earned + 250);
+
       const nextPendingIdx = exercises.findIndex(
         (e, i) => i > exIdx && nextTelemetry[e.id]?.status !== 'completed'
       );
@@ -224,14 +277,15 @@ export function App() {
         };
         setTelemetry(nextTelemetry);
         setSelectedExerciseIndex(nextPendingIdx);
+        // Automatically show 3D Reference Pre-Check Gate for the next exercise
+        setShowReferenceGate(true);
         return;
       }
 
-      // Check if ALL exercises are now completed -> auto-trigger Session Summary!
       const allCompleted = exercises.every((e) => nextTelemetry[e.id]?.status === 'completed');
       setTelemetry(nextTelemetry);
       if (allCompleted) {
-        handleFinishSession(nextTelemetry);
+        handleFinishSession(nextTelemetry, bonusScore, nextBestStreak);
       }
       return;
     }
@@ -240,6 +294,8 @@ export function App() {
   };
 
   const handleRecordFormError = (exercise: Exercise, deviationDeg: number) => {
+    setStreakCount(0); // Reset combo multiplier on form drift
+
     setTelemetry((prev) => {
       const curr = prev[exercise.id];
       if (!curr) return prev;
@@ -272,7 +328,7 @@ export function App() {
     setAlerts((prev) => [newAlert, ...prev]);
   };
 
-  const handleCompleteSet = (exerciseId: string) => {
+  const handleCompleteExercise = (exerciseId: string) => {
     const exIdx = exercises.findIndex((e) => e.id === exerciseId);
     const ex = exercises[exIdx];
     if (!ex) return;
@@ -280,21 +336,26 @@ export function App() {
     const current = telemetry[exerciseId];
     if (!current) return;
 
-    const remainingInSet = Math.max(0, ex.reps - current.completedRepsInCurrentSet);
-    const nextCompletedSets = Math.min(ex.sets, current.completedSets + 1);
-    const isExerciseDone = nextCompletedSets >= ex.sets;
+    const totalForEx = ex.sets * ex.reps;
+    const remainingReps = Math.max(0, totalForEx - current.totalRepsCompleted);
+    const completionPoints = 250 + remainingReps * 50;
+    const nextScore = rehabScore + completionPoints;
+    const nextStreak = streakCount + Math.max(1, remainingReps);
+    const nextBest = Math.max(bestStreak, nextStreak);
+
+    setRehabScore(nextScore);
+    setStreakCount(nextStreak);
+    setBestStreak(nextBest);
+    showFloatingPoints(completionPoints);
 
     const updatedEx: ExerciseTelemetry = {
       ...current,
-      completedSets: nextCompletedSets,
-      completedRepsInCurrentSet: isExerciseDone ? ex.reps : 0,
-      totalRepsCompleted: Math.min(
-        ex.sets * ex.reps,
-        current.totalRepsCompleted + remainingInSet
-      ),
-      goodReps: current.goodReps + remainingInSet,
+      completedSets: ex.sets,
+      completedRepsInCurrentSet: ex.reps,
+      totalRepsCompleted: totalForEx,
+      goodReps: current.goodReps + remainingReps,
       peakRomAchieved: ex.targetAngle,
-      status: isExerciseDone ? 'completed' : 'in-progress',
+      status: 'completed',
     };
 
     const nextTelemetry: Record<string, ExerciseTelemetry> = {
@@ -302,29 +363,36 @@ export function App() {
       [exerciseId]: updatedEx,
     };
 
-    if (isExerciseDone) {
-      const nextIdx = exercises.findIndex(
-        (e, i) => i > exIdx && nextTelemetry[e.id]?.status !== 'completed'
-      );
-      if (nextIdx !== -1) {
-        nextTelemetry[exercises[nextIdx].id] = {
-          ...nextTelemetry[exercises[nextIdx].id],
-          status: 'in-progress',
-        };
-        setTelemetry(nextTelemetry);
-        setSelectedExerciseIndex(nextIdx);
-        return;
-      }
-
-      const allCompleted = exercises.every((e) => nextTelemetry[e.id]?.status === 'completed');
+    const nextIdx = exercises.findIndex(
+      (e, i) => i > exIdx && nextTelemetry[e.id]?.status !== 'completed'
+    );
+    if (nextIdx !== -1) {
+      nextTelemetry[exercises[nextIdx].id] = {
+        ...nextTelemetry[exercises[nextIdx].id],
+        status: 'in-progress',
+      };
       setTelemetry(nextTelemetry);
-      if (allCompleted) {
-        handleFinishSession(nextTelemetry);
-      }
+      setSelectedExerciseIndex(nextIdx);
+      setShowReferenceGate(true);
+      return;
+    }
+
+    const anyRemainingIdx = exercises.findIndex(
+      (e) => nextTelemetry[e.id]?.status !== 'completed'
+    );
+    if (anyRemainingIdx !== -1) {
+      nextTelemetry[exercises[anyRemainingIdx].id] = {
+        ...nextTelemetry[exercises[anyRemainingIdx].id],
+        status: 'in-progress',
+      };
+      setTelemetry(nextTelemetry);
+      setSelectedExerciseIndex(anyRemainingIdx);
+      setShowReferenceGate(true);
       return;
     }
 
     setTelemetry(nextTelemetry);
+    handleFinishSession(nextTelemetry, nextScore, nextBest);
   };
 
   const handleResetExercise = (exerciseId: string) => {
@@ -345,11 +413,9 @@ export function App() {
     }));
   };
 
-  const handleStartSession = (exerciseIndex?: number) => {
-    if (typeof exerciseIndex === 'number') {
-      setSelectedExerciseIndex(exerciseIndex);
-    }
-    setCurrentView('active-ar');
+  const handleSelectExerciseInStack = (idx: number) => {
+    setSelectedExerciseIndex(idx);
+    setShowReferenceGate(true);
   };
 
   const handleStartNewSession = () => {
@@ -358,10 +424,14 @@ export function App() {
     setTelemetry(createInitialTelemetry(exercises));
     setSessionAlerts([]);
     setSelectedExerciseIndex(0);
+    setShowReferenceGate(true);
+    setRehabScore(0);
+    setStreakCount(0);
+    setBestStreak(0);
     setSyncStatus('idle');
     setLastSyncedRecord(null);
     setPatientNote('');
-    setCurrentView('dashboard');
+    setCurrentView('active-ar');
   };
 
   // Clinician Portal handlers
@@ -404,13 +474,11 @@ export function App() {
     });
   };
 
-  const hasActiveProgress = Object.values(telemetry).some((t) => t.totalRepsCompleted > 0);
-
   const handleTopPrimaryAction = () => {
     if (currentView === 'active-ar') {
       handleFinishSession();
     } else {
-      handleStartSession();
+      setCurrentView('active-ar');
     }
   };
 
@@ -420,36 +488,28 @@ export function App() {
         currentView={currentView}
         onNavigate={setCurrentView}
         onPrimaryAction={handleTopPrimaryAction}
-        hasActiveProgress={hasActiveProgress}
+        rehabScore={rehabScore}
       />
 
       <div className="flex-1">
-        {currentView === 'dashboard' && (
-          <PatientDashboard
-            patient={PATIENT_PROFILE}
-            exercises={exercises}
-            telemetry={telemetry}
-            selectedExerciseIndex={selectedExerciseIndex}
-            onSelectExercise={setSelectedExerciseIndex}
-            onStartSession={handleStartSession}
-            irConnected={irConnected}
-            onCalibrateSensor={handleCalibrateSensor}
-            isCalibrating={isCalibrating}
-          />
-        )}
-
         {currentView === 'active-ar' && (
           <ActiveARSession
+            patient={PATIENT_PROFILE}
             exercises={exercises}
             activeExerciseIndex={selectedExerciseIndex}
-            onSelectExerciseIndex={setSelectedExerciseIndex}
+            onSelectExerciseIndex={handleSelectExerciseInStack}
             telemetry={telemetry}
+            showReferenceGate={showReferenceGate}
+            onAcceptReferenceGate={() => setShowReferenceGate(false)}
+            onReopenReferenceGate={() => setShowReferenceGate(true)}
+            rehabScore={rehabScore}
+            streakCount={streakCount}
+            comboMultiplier={comboMultiplier}
+            lastPointsDelta={lastPointsDelta}
             onRecordGoodRep={handleRecordGoodRep}
             onRecordFormError={handleRecordFormError}
-            onCompleteSet={handleCompleteSet}
+            onCompleteExercise={handleCompleteExercise}
             onResetExercise={handleResetExercise}
-            onFinishSession={() => handleFinishSession()}
-            onBackToDashboard={() => setCurrentView('dashboard')}
           />
         )}
 
@@ -459,6 +519,8 @@ export function App() {
             exercises={exercises}
             telemetry={telemetry}
             sessionAlerts={sessionAlerts}
+            rehabScore={rehabScore}
+            bestStreak={bestStreak}
             painScore={painScore}
             effortScore={effortScore}
             patientNote={patientNote}
@@ -468,7 +530,15 @@ export function App() {
             syncStatus={syncStatus}
             lastSyncedRecord={lastSyncedRecord}
             onSyncToEHR={() =>
-              triggerEHRCloudSync(telemetry, exercises, painScore, effortScore, patientNote)
+              triggerEHRCloudSync(
+                telemetry,
+                exercises,
+                rehabScore,
+                bestStreak,
+                painScore,
+                effortScore,
+                patientNote
+              )
             }
             onStartNewSession={handleStartNewSession}
             onOpenClinicianPortal={() => setCurrentView('clinician')}
@@ -485,18 +555,18 @@ export function App() {
             onUpdateExercise={handleUpdateExercise}
             onAddExercise={handleAddExercise}
             onRemoveExercise={handleRemoveExercise}
-            onGoToPatientView={() => setCurrentView('dashboard')}
+            onGoToARSession={() => setCurrentView('active-ar')}
           />
         )}
       </div>
 
-      <footer className="border-t border-slate-200 bg-white mt-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+      <footer className="border-t border-slate-200 bg-white mt-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
           <span>
             AR Rehab Companion · {PATIENT_PROFILE.clinicName}
           </span>
           <span>
-            HIPAA-Aligned Home Telemetry Prototype · Care Plan by {PATIENT_PROFILE.clinicianName}
+            Prescribed by {PATIENT_PROFILE.clinicianName} · IR Depth &amp; EHR Sync Prototype
           </span>
         </div>
       </footer>

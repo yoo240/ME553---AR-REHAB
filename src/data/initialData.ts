@@ -3,8 +3,16 @@ import {
   Exercise,
   ExerciseTelemetry,
   FormDriftAlert,
+  FormTier,
   PatientProfile,
 } from '../types/rehab';
+
+export function computeFormTier(accuracyPct: number): FormTier {
+  if (accuracyPct >= 95) return 'Platinum Form';
+  if (accuracyPct >= 88) return 'Gold Form';
+  if (accuracyPct >= 75) return 'Silver Form';
+  return 'In Training';
+}
 
 export const PATIENT_PROFILE: PatientProfile = {
   firstName: 'Alex',
@@ -15,6 +23,7 @@ export const PATIENT_PROFILE: PatientProfile = {
   protocolName: 'Post-Op Rotator Cuff & Patellar Stabilization',
   protocolWeek: 4,
   totalWeeks: 8,
+  dailyStreakDays: 6,
 };
 
 export const INITIAL_EXERCISES: Exercise[] = [
@@ -30,9 +39,9 @@ export const INITIAL_EXERCISES: Exercise[] = [
     toleranceDeg: 8,
     holdSeconds: 2,
     instructions: [
-      'Stand upright facing the IR depth sensor with feet shoulder-width apart.',
-      'Keep your right elbow extended and thumb pointing upward.',
-      'Raise your arm smoothly forward to the glowing AR target zone and hold 2 seconds.',
+      'Keep your right elbow straight with thumb pointing upward.',
+      'Raise arm smoothly forward into the glowing green target ring.',
+      'Hold steady at 160° for 2 seconds, then lower with control.',
     ],
     correctionCue: 'Raise elbow 12° higher — align within target zone',
     correctionDirection: 'up',
@@ -50,9 +59,9 @@ export const INITIAL_EXERCISES: Exercise[] = [
     toleranceDeg: 7,
     holdSeconds: 3,
     instructions: [
-      'Sit upright in a firm chair with both thighs fully supported.',
-      'Slowly straighten your left knee until your heel reaches the AR bounding box.',
-      'Hold terminal extension for 3 seconds, then lower with a controlled 3-second tempo.',
+      'Sit upright with both thighs resting evenly on the chair.',
+      'Extend your left heel forward until inside the AR target box.',
+      'Pause 3 seconds at full extension before lowering smoothly.',
     ],
     correctionCue: 'Extend heel 10° higher — avoid hip leaning',
     correctionDirection: 'up',
@@ -70,9 +79,9 @@ export const INITIAL_EXERCISES: Exercise[] = [
     toleranceDeg: 8,
     holdSeconds: 2,
     instructions: [
-      'Position feet slightly wider than hip-width, toes turned out 10°.',
-      'Hinge hips backward and descend steadily until knee flexion hits 95°.',
-      'Keep torso aligned with the AR centerline and drive evenly through heels.',
+      'Keep chest lifted and weight balanced evenly across your heels.',
+      'Hinge hips back smoothly until knees reach the 95° target depth.',
+      'Hold 2 seconds in the green zone, then drive upward cleanly.',
     ],
     correctionCue: 'Slow down descent — shift weight back into heels',
     correctionDirection: 'back',
@@ -92,9 +101,9 @@ export const PRESET_CLINICIAN_EXERCISES: Array<Omit<Exercise, 'id'>> = [
     toleranceDeg: 6,
     holdSeconds: 2,
     instructions: [
-      'Stand tall with light fingertip support and pelvis level.',
-      'Lift right leg smoothly out to the side without leaning trunk.',
-      'Hold at peak abduction for 2 seconds before returning.',
+      'Stand tall with pelvis level and light fingertip support.',
+      'Lift right leg smoothly to the side into the AR target ring.',
+      'Hold 2 seconds at peak height before returning slowly.',
     ],
     correctionCue: 'Reduce torso tilt — keep pelvis level',
     correctionDirection: 'out',
@@ -111,9 +120,9 @@ export const PRESET_CLINICIAN_EXERCISES: Array<Omit<Exercise, 'id'>> = [
     toleranceDeg: 8,
     holdSeconds: 2,
     instructions: [
-      'Keep shoulder blades depressed and relaxed away from ears.',
-      'Elevate right arm in the scapular plane (30° forward of coronal).',
-      'Pause inside the green tolerance rings for 2 seconds.',
+      'Keep shoulder blades relaxed downward away from your ears.',
+      'Raise right arm smoothly in the scapular plane toward 120°.',
+      'Pause inside the green rings for 2 seconds before lowering.',
     ],
     correctionCue: 'Lower shoulder trap — raise wrist 8° higher',
     correctionDirection: 'up',
@@ -131,7 +140,7 @@ export function createInitialTelemetry(exercises: Exercise[]): Record<string, Ex
       totalRepsCompleted: 0,
       goodReps: 0,
       errorCount: 0,
-      peakRomAchieved: ex.pattern === 'bodyweight-squat' ? ex.restAngle : ex.restAngle,
+      peakRomAchieved: ex.restAngle,
       status: index === 0 ? 'in-progress' : 'pending',
     };
   });
@@ -167,6 +176,9 @@ export const INITIAL_EHR_LOGS: EHRSessionRecord[] = [
     totalRepsCompleted: 88,
     totalRepsTarget: 90,
     averageAccuracyPct: 92,
+    pointsEarned: 2140,
+    bestStreak: 9,
+    formTier: 'Gold Form',
     painScore: 3,
     effortScore: 6,
     patientNote: 'Mild tightness at top of shoulder flexion on final set, no sharp pain.',
@@ -206,6 +218,9 @@ export const INITIAL_EHR_LOGS: EHRSessionRecord[] = [
     totalRepsCompleted: 90,
     totalRepsTarget: 90,
     averageAccuracyPct: 89,
+    pointsEarned: 1890,
+    bestStreak: 7,
+    formTier: 'Gold Form',
     painScore: 4,
     effortScore: 7,
     patientNote: 'Felt more stable during knee extension holds.',

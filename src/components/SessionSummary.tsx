@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
 import {
   Activity,
+  Award,
   CheckCircle2,
   CloudUpload,
   FileText,
+  Flame,
   Printer,
   RefreshCw,
   ShieldCheck,
+  Trophy,
   X,
 } from 'lucide-react';
+import { computeFormTier } from '../data/initialData';
 import {
   EHRSessionRecord,
   Exercise,
@@ -22,6 +26,8 @@ interface SessionSummaryProps {
   exercises: Exercise[];
   telemetry: Record<string, ExerciseTelemetry>;
   sessionAlerts: FormDriftAlert[];
+  rehabScore: number;
+  bestStreak: number;
   painScore: number;
   effortScore: number;
   patientNote: string;
@@ -40,6 +46,8 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
   exercises,
   telemetry,
   sessionAlerts,
+  rehabScore,
+  bestStreak,
   painScore,
   effortScore,
   patientNote,
@@ -54,7 +62,6 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
 }) => {
   const [showReportModal, setShowReportModal] = useState(false);
 
-  // Aggregate live session metrics (if user jumps straight to Summary before doing reps, display clean 0 or real completed values)
   const totalTargetReps = exercises.reduce((acc, ex) => acc + ex.sets * ex.reps, 0);
   const totalRepsCompleted = exercises.reduce((acc, ex) => {
     const t = telemetry[ex.id];
@@ -71,19 +78,17 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
       ? 96
       : 0;
 
-  // Compute average ROM achievement percentage
+  const formTier = computeFormTier(averageAccuracyPct);
+
   const romMetrics = exercises.map((ex) => {
     const t = telemetry[ex.id];
     const hasDoneAny = (t?.totalRepsCompleted ?? 0) > 0;
-    const achieved = hasDoneAny
-      ? t?.peakRomAchieved ?? ex.targetAngle
-      : 0;
+    const achieved = hasDoneAny ? t?.peakRomAchieved ?? ex.targetAngle : 0;
 
     let delta = 0;
     let metTarget = false;
     if (hasDoneAny) {
       if (ex.pattern === 'bodyweight-squat') {
-        // Lower angle = deeper squat
         delta = ex.targetAngle - achieved;
         metTarget = achieved <= ex.targetAngle + ex.toleranceDeg;
       } else {
@@ -123,16 +128,19 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
-      {/* Header */}
-      <section className="bg-white border border-slate-200 rounded-xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <p className="text-xs font-medium text-teal-700">
-            Post-Session Telemetry &amp; Outcome Capture
-          </p>
-          <h1 className="mt-1 text-2xl sm:text-3xl font-display font-bold text-slate-900 tracking-tight">
+      {/* Gamified Celebration & Clinical Header */}
+      <section className="bg-white border border-slate-200 rounded-2xl p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+        <div className="space-y-1">
+          <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-700">
+            <Trophy className="w-4 h-4 text-amber-500" aria-hidden="true" />
+            <span>
+              Day {patient.dailyStreakDays} Streak Active · {patient.firstName}&apos;s Session Wrap-Up
+            </span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-display font-bold text-slate-900 tracking-tight">
             Session Summary &amp; EHR Cloud Sync
           </h1>
-          <p className="mt-1 text-sm text-slate-600">
+          <p className="text-sm text-slate-600">
             {patient.fullName} ({patient.mrn}) · Care Plan by {patient.clinicianName}
           </p>
         </div>
@@ -141,7 +149,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
           <button
             type="button"
             onClick={() => setShowReportModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg transition-colors cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-colors cursor-pointer"
           >
             <FileText className="w-4 h-4" aria-hidden="true" />
             <span>Preview Clinical Report</span>
@@ -150,60 +158,65 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
           <button
             type="button"
             onClick={onStartNewSession}
-            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg transition-colors cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-xl transition-colors cursor-pointer"
           >
             <RefreshCw className="w-4 h-4" aria-hidden="true" />
-            <span>New Session</span>
+            <span>Start Fresh Session</span>
           </button>
         </div>
       </section>
 
-      {/* Auto-Recorded Completion KPIs */}
-      <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white border border-slate-200 rounded-xl p-5">
+      {/* Gamified Scoreboard + Clinical KPIs */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-br from-teal-600 to-teal-700 text-white rounded-2xl p-5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-teal-100">Points Earned</span>
+            <Award className="w-4 h-4 text-amber-300" aria-hidden="true" />
+          </div>
+          <div className="mt-2 flex items-baseline gap-1.5 font-mono tabular-nums">
+            <span className="text-3xl font-bold">{rehabScore.toLocaleString()}</span>
+            <span className="text-xs text-teal-100">pts</span>
+          </div>
+          <p className="mt-2 text-xs text-teal-100 flex items-center gap-1">
+            <Flame className="w-3.5 h-3.5 text-amber-300" aria-hidden="true" />
+            <span>Best Combo: {Math.max(1, bestStreak)} clean reps</span>
+          </p>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-2xl p-5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-500">Form Accuracy Rank</span>
+            <Trophy className="w-4 h-4 text-amber-500" aria-hidden="true" />
+          </div>
+          <div className="mt-2 text-2xl font-display font-bold text-slate-900">
+            {formTier}
+          </div>
+          <p className="mt-2 text-xs font-mono tabular-nums text-emerald-700 font-semibold">
+            {averageAccuracyPct}% Avg Form ({totalErrors} drift {totalErrors === 1 ? 'cue' : 'cues'})
+          </p>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-2xl p-5">
           <div className="text-xs font-medium text-slate-500">Total Reps Completed</div>
           <div className="mt-2 flex items-baseline gap-2 font-mono tabular-nums">
             <span className="text-3xl font-bold text-slate-900">{totalRepsCompleted}</span>
-            <span className="text-sm text-slate-500">/ {totalTargetReps} prescribed</span>
+            <span className="text-sm text-slate-500">/ {totalTargetReps} target</span>
           </div>
           <p className="mt-2 text-xs text-slate-600">
-            Auto-counted via 30 Hz IR skeletal tracking
+            Auto-tracked via 30 Hz IR depth skeleton
           </p>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl p-5">
-          <div className="text-xs font-medium text-slate-500">Average Form Accuracy</div>
-          <div className="mt-2 flex items-baseline gap-2 font-mono tabular-nums">
-            <span
-              className={`text-3xl font-bold ${
-                averageAccuracyPct >= 85
-                  ? 'text-emerald-700'
-                  : averageAccuracyPct > 0
-                  ? 'text-amber-700'
-                  : 'text-slate-900'
-              }`}
-            >
-              {averageAccuracyPct}%
-            </span>
-            <span className="text-xs text-slate-500">
-              {totalErrors} drift {totalErrors === 1 ? 'cue' : 'cues'}
-            </span>
-          </div>
-          <p className="mt-2 text-xs text-slate-600">
-            Time spent within calibrated concentric target rings
-          </p>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-xl p-5">
-          <div className="text-xs font-medium text-slate-500">Peak ROM Attainment</div>
+        <div className="bg-white border border-slate-200 rounded-2xl p-5">
+          <div className="text-xs font-medium text-slate-500">ROM Targets Met</div>
           <div className="mt-2 flex items-baseline gap-2 font-mono tabular-nums">
             <span className="text-3xl font-bold text-teal-700">
               {romMetrics.filter((m) => m.metTarget).length} / {exercises.length}
             </span>
-            <span className="text-sm text-slate-500">targets met</span>
+            <span className="text-sm text-slate-500">exercises</span>
           </div>
           <p className="mt-2 text-xs text-slate-600">
-            Peak joint angles verified against PT thresholds
+            Verified against Dr. Jenkins&apos; thresholds
           </p>
         </div>
       </section>
@@ -211,13 +224,13 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
       {/* Main Split: ROM Breakdown + Pain/Effort Sliders & EHR Sync */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Range of Motion Achieved vs Target */}
-        <section className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-6 space-y-5">
+        <section className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-6 space-y-5">
           <div>
             <h2 className="text-lg font-display font-semibold text-slate-900">
               Range of Motion (ROM) Achieved vs. Target
             </h2>
             <p className="text-sm text-slate-600">
-              Peak kinematic joint angles recorded across each prescribed exercise.
+              Peak kinematic joint angles recorded across each prescribed movement.
             </p>
           </div>
 
@@ -252,14 +265,14 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
                             metTarget ? 'text-emerald-700' : 'text-amber-700'
                           }`}
                         >
-                          {metTarget ? 'Within Target' : 'Below Target'} (
+                          {metTarget ? 'Target Achieved' : 'Below Target'} (
                           {delta >= 0 ? `+${delta}°` : `${delta}°`})
                         </div>
                       )}
                     </div>
                   </div>
 
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-300 ${
                         !hasDoneAny
@@ -279,7 +292,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
 
         {/* Post-Session Pain & Effort Sliders + Cloud Sync to EHR */}
         <div className="lg:col-span-5 space-y-6">
-          <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
+          <section className="bg-white border border-slate-200 rounded-2xl p-6 space-y-5">
             <div>
               <h2 className="text-lg font-display font-semibold text-slate-900">
                 Post-Session Pain &amp; Effort Check-In
@@ -289,14 +302,16 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
               </p>
             </div>
 
-            {/* Pain Slider */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label htmlFor="pain-slider" className="text-sm font-medium text-slate-800">
                   Joint Pain Level (1–10)
                 </label>
                 <span className="text-sm font-mono font-bold text-slate-900 tabular-nums">
-                  {painScore} / 10 · <span className="font-sans font-medium text-xs text-slate-600">{painDescriptor}</span>
+                  {painScore} / 10 ·{' '}
+                  <span className="font-sans font-medium text-xs text-slate-600">
+                    {painDescriptor}
+                  </span>
                 </span>
               </div>
               <input
@@ -316,14 +331,16 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
               </div>
             </div>
 
-            {/* Effort Slider */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label htmlFor="effort-slider" className="text-sm font-medium text-slate-800">
                   Perceived Effort / RPE (1–10)
                 </label>
                 <span className="text-sm font-mono font-bold text-slate-900 tabular-nums">
-                  {effortScore} / 10 · <span className="font-sans font-medium text-xs text-slate-600">{effortDescriptor}</span>
+                  {effortScore} / 10 ·{' '}
+                  <span className="font-sans font-medium text-xs text-slate-600">
+                    {effortDescriptor}
+                  </span>
                 </span>
               </div>
               <input
@@ -343,7 +360,6 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
               </div>
             </div>
 
-            {/* Patient Note */}
             <div className="space-y-1.5">
               <label htmlFor="patient-note" className="text-sm font-medium text-slate-800">
                 Patient Note (Optional)
@@ -353,17 +369,17 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
                 rows={2}
                 value={patientNote}
                 onChange={(e) => onChangePatientNote(e.target.value)}
-                placeholder="Describe any tightness, stiffness, or comfort improvements..."
-                className="w-full px-3 py-2 text-sm text-slate-800 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white"
+                placeholder="Share how your shoulder or knee felt today..."
+                className="w-full px-3 py-2 text-sm text-slate-800 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white"
               />
             </div>
           </section>
 
           {/* Cloud Sync to EHR Card */}
-          <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+          <section className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <CloudUpload className="w-5 h-5 text-teal-700" aria-hidden="true" />
+                <CloudUpload className="w-5 h-5 text-teal-600" aria-hidden="true" />
                 <h2 className="text-base font-display font-semibold text-slate-900">
                   Cloud Sync to EHR
                 </h2>
@@ -371,8 +387,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
               <span className="text-xs font-mono text-slate-500">HL7 FHIR R4</span>
             </div>
 
-            {/* Pipeline Steps */}
-            <div className="space-y-2.5 py-2">
+            <div className="space-y-2.5 py-1">
               <div className="flex items-center gap-2.5 text-xs">
                 <CheckCircle2
                   className={`w-4 h-4 shrink-0 ${
@@ -381,7 +396,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
                   aria-hidden="true"
                 />
                 <span className={syncStatus !== 'idle' ? 'text-slate-900 font-medium' : 'text-slate-500'}>
-                  1. Kinematic ROM &amp; rep telemetry encrypted
+                  1. Kinematic ROM, score &amp; rep telemetry packaged
                 </span>
               </div>
 
@@ -401,7 +416,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
                       : 'text-slate-500'
                   }
                 >
-                  2. Pain/effort &amp; form-drift observations packaged
+                  2. Pain/effort &amp; form-drift alerts validated
                 </span>
               </div>
 
@@ -422,7 +437,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
             </div>
 
             {syncStatus === 'synced' && lastSyncedRecord && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-900">
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900">
                 <div className="font-semibold">
                   Synced to Epic/MyChart EHR — Sent to Dr. Sarah Jenkins
                 </div>
@@ -437,7 +452,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
                 type="button"
                 onClick={onSyncToEHR}
                 disabled={syncStatus === 'packaging' || syncStatus === 'syncing'}
-                className="flex-1 py-2.5 px-4 bg-teal-700 hover:bg-teal-800 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition-colors cursor-pointer"
+                className="flex-1 py-2.5 px-4 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer"
               >
                 {syncStatus === 'packaging'
                   ? 'Packaging Telemetry...'
@@ -452,7 +467,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
                 <button
                   type="button"
                   onClick={onOpenClinicianPortal}
-                  className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-medium rounded-lg transition-colors cursor-pointer"
+                  className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-medium rounded-xl transition-colors cursor-pointer"
                 >
                   View in PT Portal
                 </button>
@@ -470,7 +485,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
           aria-modal="true"
           aria-labelledby="clinical-report-title"
         >
-          <div className="bg-white border border-slate-200 rounded-xl max-w-2xl w-full max-h-[88vh] overflow-y-auto p-6 space-y-5">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full max-h-[88vh] overflow-y-auto p-6 space-y-5">
             <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-200">
               <div>
                 <div className="text-xs font-mono text-teal-700">
@@ -496,14 +511,14 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
               </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-slate-50 border border-slate-200 rounded-lg p-3.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-slate-50 border border-slate-200 rounded-xl p-3.5">
               <div>
                 <div className="text-slate-500">Patient</div>
                 <div className="font-semibold text-slate-900 mt-0.5">{patient.fullName}</div>
               </div>
               <div>
-                <div className="text-slate-500">MRN</div>
-                <div className="font-mono font-semibold text-slate-900 mt-0.5">{patient.mrn}</div>
+                <div className="text-slate-500">Form Tier</div>
+                <div className="font-semibold text-teal-700 mt-0.5">{formTier}</div>
               </div>
               <div>
                 <div className="text-slate-500">Pain / Effort</div>
@@ -512,9 +527,9 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
                 </div>
               </div>
               <div>
-                <div className="text-slate-500">Avg Form</div>
-                <div className="font-mono font-semibold text-emerald-700 mt-0.5">
-                  {averageAccuracyPct}%
+                <div className="text-slate-500">Session Score</div>
+                <div className="font-mono font-semibold text-amber-700 mt-0.5">
+                  {rehabScore.toLocaleString()} pts
                 </div>
               </div>
             </div>
@@ -523,7 +538,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
               <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
                 Exercise ROM &amp; Completion Table
               </h4>
-              <div className="border border-slate-200 rounded-lg overflow-hidden">
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
                     <tr>
@@ -578,7 +593,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
               </div>
             )}
 
-            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700">
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700">
               <span className="font-semibold text-slate-900">Patient Subjective Note: </span>
               {patientNote.trim() ? patientNote : 'No additional pain or discomfort reported.'}
             </div>
@@ -595,7 +610,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
               <button
                 type="button"
                 onClick={() => setShowReportModal(false)}
-                className="px-4 py-2 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg cursor-pointer"
+                className="px-4 py-2 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg cursor-pointer"
               >
                 Close Preview
               </button>

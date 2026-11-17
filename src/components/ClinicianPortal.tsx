@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import {
   AlertTriangle,
+  Award,
   Check,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Flame,
   Plus,
   Sliders,
   Trash2,
+  Trophy,
 } from 'lucide-react';
 import { PRESET_CLINICIAN_EXERCISES } from '../data/initialData';
 import {
@@ -27,7 +30,7 @@ interface ClinicianPortalProps {
   onUpdateExercise: (exerciseId: string, updates: Partial<Exercise>) => void;
   onAddExercise: (newExercise: Omit<Exercise, 'id'>) => void;
   onRemoveExercise: (exerciseId: string) => void;
-  onGoToPatientView: () => void;
+  onGoToARSession: () => void;
 }
 
 export const ClinicianPortal: React.FC<ClinicianPortalProps> = ({
@@ -39,7 +42,7 @@ export const ClinicianPortal: React.FC<ClinicianPortalProps> = ({
   onUpdateExercise,
   onAddExercise,
   onRemoveExercise,
-  onGoToPatientView,
+  onGoToARSession,
 }) => {
   const [expandedLogId, setExpandedLogId] = useState<string | null>(ehrLogs[0]?.id ?? null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -47,7 +50,6 @@ export const ClinicianPortal: React.FC<ClinicianPortalProps> = ({
   const [editReps, setEditReps] = useState<number>(10);
   const [editAngle, setEditAngle] = useState<number>(160);
 
-  // Add new exercise form state
   const [newName, setNewName] = useState('Standing Hip Abduction');
   const [newJoint, setNewJoint] = useState('Right Gluteus Medius & Hip');
   const [newPattern, setNewPattern] = useState<MovementPattern>('hip-abduction');
@@ -71,7 +73,9 @@ export const ClinicianPortal: React.FC<ClinicianPortalProps> = ({
       targetAngle: Math.max(15, Math.min(180, editAngle)),
     });
     setEditingId(null);
-    setPlanBannerMsg(`Updated "${ex.name}" — synced immediately to ${patient.firstName}'s Dashboard.`);
+    setPlanBannerMsg(
+      `Updated "${ex.name}" — synced immediately to ${patient.firstName}'s Active AR queue.`
+    );
   };
 
   const handleApplyPreset = (presetIndex: number) => {
@@ -109,8 +113,8 @@ export const ClinicianPortal: React.FC<ClinicianPortalProps> = ({
       toleranceDeg: 8,
       holdSeconds: Math.max(1, Math.min(10, newHold)),
       instructions: [
-        'Position body centered 1.8m from the IR depth camera.',
-        `Move smoothly until the joint reaches ${newAngle}° within the AR target zone.`,
+        'Center yourself 1.8m from the IR depth sensor.',
+        `Move smoothly until the joint reaches ${newAngle}° inside the green ring.`,
         `Hold peak posture for ${newHold} seconds before controlled return.`,
       ],
       correctionCue:
@@ -122,18 +126,19 @@ export const ClinicianPortal: React.FC<ClinicianPortalProps> = ({
     });
 
     setPlanBannerMsg(
-      `Added "${trimmedName}" (${newSets}×${newReps} @ ${newAngle}°) to ${patient.firstName}'s synced plan.`
+      `Added "${trimmedName}" (${newSets}×${newReps} @ ${newAngle}°) to ${patient.firstName}'s AR Session queue.`
     );
   };
 
   const unreviewedCount = alerts.filter((a) => !a.reviewed).length;
+  const latestLog = ehrLogs[0];
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
-      {/* Clinician Header */}
-      <section className="bg-white border border-slate-200 rounded-xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Clinician Header + Gamified Adherence Strip */}
+      <section className="bg-white border border-slate-200 rounded-2xl p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
         <div>
-          <p className="text-xs font-medium text-teal-700">
+          <p className="text-xs font-semibold text-teal-700">
             Clinician Oversight · {patient.clinicianName}
           </p>
           <h1 className="mt-1 text-2xl sm:text-3xl font-display font-bold text-slate-900 tracking-tight">
@@ -145,13 +150,29 @@ export const ClinicianPortal: React.FC<ClinicianPortalProps> = ({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={onGoToPatientView}
-          className="px-4 py-2.5 text-sm font-semibold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-        >
-          Preview Patient Dashboard
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 px-3.5 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs font-semibold text-amber-900">
+            <Flame className="w-4 h-4 text-amber-500" aria-hidden="true" />
+            <span>{patient.dailyStreakDays}-Day Rehab Streak</span>
+          </div>
+
+          {latestLog && (
+            <div className="flex items-center gap-2 px-3.5 py-2 bg-teal-50 border border-teal-200 rounded-xl text-xs font-semibold text-teal-900">
+              <Trophy className="w-4 h-4 text-teal-600" aria-hidden="true" />
+              <span>
+                Latest: {latestLog.formTier} ({latestLog.pointsEarned.toLocaleString()} pts)
+              </span>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={onGoToARSession}
+            className="px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-xl transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            Launch AR Session View
+          </button>
+        </div>
       </section>
 
       {planBannerMsg && (
@@ -176,14 +197,14 @@ export const ClinicianPortal: React.FC<ClinicianPortalProps> = ({
       {/* Top Grid: Synced EHR Completion Log + Form-Drift Alerts */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Synced EHR Completion Log */}
-        <section className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+        <section className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-6 space-y-4">
           <div className="flex items-center justify-between gap-2">
             <div>
               <h2 className="text-lg font-display font-semibold text-slate-900">
                 Synced EHR Completion Log
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Telemetry automatically received from Alex&apos;s home IR depth unit.
+                Telemetry, adherence points, and form tiers synced from home AR unit.
               </p>
             </div>
             <span className="text-xs font-mono text-slate-500 tabular-nums">
@@ -202,15 +223,20 @@ export const ClinicianPortal: React.FC<ClinicianPortalProps> = ({
                     className="w-full px-4 py-3.5 text-left flex flex-wrap items-center justify-between gap-3 hover:bg-slate-50 transition-colors cursor-pointer"
                   >
                     <div>
-                      <div className="text-sm font-semibold text-slate-900">
-                        {log.dateLabel}{' '}
+                      <div className="text-sm font-semibold text-slate-900 flex flex-wrap items-center gap-2">
+                        <span>{log.dateLabel}</span>
                         <span className="text-xs font-mono font-normal text-slate-500">
                           · {log.timestamp}
                         </span>
                       </div>
-                      <div className="mt-0.5 text-xs text-slate-500 font-mono tabular-nums">
-                        {log.totalRepsCompleted}/{log.totalRepsTarget} reps · Pain {log.painScore}/10 · Effort{' '}
-                        {log.effortScore}/10
+                      <div className="mt-0.5 text-xs text-slate-500 font-mono tabular-nums flex flex-wrap items-center gap-2">
+                        <span>
+                          {log.totalRepsCompleted}/{log.totalRepsTarget} reps
+                        </span>
+                        <span>·</span>
+                        <span>Pain {log.painScore}/10</span>
+                        <span>·</span>
+                        <span className="text-teal-700 font-semibold">{log.formTier}</span>
                       </div>
                     </div>
 
@@ -225,7 +251,10 @@ export const ClinicianPortal: React.FC<ClinicianPortalProps> = ({
                         >
                           {log.averageAccuracyPct}% form
                         </div>
-                        <div className="text-[11px] text-emerald-700">Synced to Epic</div>
+                        <div className="text-[11px] text-amber-700 flex items-center justify-end gap-1">
+                          <Award className="w-3 h-3" aria-hidden="true" />
+                          <span>{log.pointsEarned.toLocaleString()} pts</span>
+                        </div>
                       </div>
                       {isExpanded ? (
                         <ChevronUp className="w-4 h-4 text-slate-400" aria-hidden="true" />
@@ -270,7 +299,7 @@ export const ClinicianPortal: React.FC<ClinicianPortalProps> = ({
         </section>
 
         {/* Form-Drift Alerts */}
-        <section className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+        <section className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-display font-semibold text-slate-900">
@@ -286,7 +315,7 @@ export const ClinicianPortal: React.FC<ClinicianPortalProps> = ({
           </div>
 
           {alerts.length === 0 ? (
-            <div className="p-6 bg-slate-50 border border-slate-200 rounded-lg text-center text-xs text-slate-600">
+            <div className="p-6 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-600">
               No form-drift alerts recorded for this protocol cycle.
             </div>
           ) : (
@@ -346,17 +375,14 @@ export const ClinicianPortal: React.FC<ClinicianPortalProps> = ({
 
       {/* Adjust or Add Prescribed Exercises */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Current Active Prescription List with Inline Edit */}
-        <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-display font-semibold text-slate-900">
-                Active Prescribed Plan ({exercises.length} Exercises)
-              </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Adjust sets, reps, or target angles — updates sync live to Alex&apos;s Dashboard.
-              </p>
-            </div>
+        <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-display font-semibold text-slate-900">
+              Active Prescribed Plan ({exercises.length} Exercises)
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Adjust sets, reps, or target angles — updates sync live to the Active AR Session stack.
+            </p>
           </div>
 
           <div className="space-y-3">
@@ -445,7 +471,7 @@ export const ClinicianPortal: React.FC<ClinicianPortalProps> = ({
                         <button
                           type="button"
                           onClick={() => handleSaveEdit(ex)}
-                          className="flex-1 py-1.5 px-3 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg cursor-pointer"
+                          className="flex-1 py-1.5 px-3 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg cursor-pointer"
                         >
                           Save
                         </button>
@@ -472,18 +498,17 @@ export const ClinicianPortal: React.FC<ClinicianPortalProps> = ({
           </div>
         </div>
 
-        {/* Quick Form to Add Prescribed Exercise */}
-        <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+        {/* Add Prescribed Exercise Form */}
+        <div className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-6 space-y-4">
           <div>
             <h2 className="text-lg font-display font-semibold text-slate-900">
               Add Prescribed Exercise
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Immediately syncs to the Patient Dashboard &amp; AR tracking queue.
+              Immediately syncs to the Active AR Session exercise stack &amp; 3D pre-check gate.
             </p>
           </div>
 
-          {/* Quick Clinical Presets */}
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-slate-500">Quick fill:</span>
             {PRESET_CLINICIAN_EXERCISES.map((preset, i) => (
@@ -607,7 +632,7 @@ export const ClinicianPortal: React.FC<ClinicianPortalProps> = ({
 
             <button
               type="submit"
-              className="w-full py-2.5 px-4 bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold rounded-lg transition-colors inline-flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-2.5 px-4 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-xl transition-colors inline-flex items-center justify-center gap-2 cursor-pointer"
             >
               <Plus className="w-4 h-4" aria-hidden="true" />
               <span>Add Exercise to Synced Plan</span>

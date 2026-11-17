@@ -1,4 +1,4 @@
-export type AppView = 'dashboard' | 'active-ar' | 'summary' | 'clinician';
+export type AppView = 'active-ar' | 'summary' | 'clinician';
 
 export type MovementPattern =
   | 'shoulder-flexion'
@@ -6,6 +6,8 @@ export type MovementPattern =
   | 'bodyweight-squat'
   | 'hip-abduction'
   | 'lateral-raise';
+
+export type FormTier = 'Platinum Form' | 'Gold Form' | 'Silver Form' | 'In Training';
 
 export interface Exercise {
   id: string;
@@ -61,6 +63,9 @@ export interface EHRSessionRecord {
   totalRepsCompleted: number;
   totalRepsTarget: number;
   averageAccuracyPct: number;
+  pointsEarned: number;
+  bestStreak: number;
+  formTier: FormTier;
   painScore: number;
   effortScore: number;
   patientNote: string;
@@ -78,4 +83,5 @@ export interface PatientProfile {
   protocolName: string;
   protocolWeek: number;
   totalWeeks: number;
+  dailyStreakDays: number;
 }
